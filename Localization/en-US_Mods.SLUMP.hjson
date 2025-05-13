@@ -1,0 +1,15 @@
+Configs: {
+	SLUMPConfigServer: {
+		DisplayName: SLUMP Config Server
+
+		EnableAsyncWritePatch: {
+			Label: Enable Write Loops
+			Tooltip: ""
+		}
+
+		EnablePacketFilterPatch: {
+			Label: Enable Packet Filter
+			Tooltip: ""
+		}
+	}
+}

@@ -1,0 +1,22 @@
+Subworld Library Unofficial Mod Patch (SLUMP)
+
+This mod patches Subworld Library by adding additional functionality and potential fixes to improve the multiplayer experience of subworlds.
+
+Currently the mod contains 2 server-sided patches which may improve stability in multiplayer:
+
+1) Write Loop Thread.
+- Seperates the Main Thread and sub/main server Read Loop Thread by adding an additional communication layer.
+- Bypasses blocking writes on the main thread.
+- Reduces the chance of servers deadlocking.
+- Reduces potential communication slowdowns on the main server.
+- May increase total packet latency for clients connected to a sub-server.
+
+2) Packet Filter.
+- Adds a packet filter to the incoming communication.
+- Intentionally blocks/drops packets a client is not allowed to send during certain stages of the login process.
+- Reduces the chance of random disconnects or 'infinite loading screens' when going between servers.
+- Bypasses 'bootplayer' code.
+
+The individual patches can be enabled/disabled in the mod config. Some might need a reload!
+
+If you encounter any problems, please post them on the workshop page.
