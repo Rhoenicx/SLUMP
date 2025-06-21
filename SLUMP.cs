@@ -1,15 +1,20 @@
+using Microsoft.Xna.Framework;
 using Mono.Cecil.Cil;
 using MonoMod.Cil;
 using SubworldLibrary;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Pipes;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
 using Terraria;
+using Terraria.Chat;
+using Terraria.GameContent.RGB;
 using Terraria.ID;
+using Terraria.Localization;
 using Terraria.ModLoader;
 using static Terraria.ModLoader.ModContent;
 
@@ -40,6 +45,7 @@ public class SLUMP : Mod
     public static bool IsSubserver = false;
     public static bool PacketFilterActive = false;
     public static bool WriteLoopActive = false;
+    public static bool ServerCrashDetectionActive = false;
     #endregion
     #endregion
 
@@ -92,6 +98,12 @@ public class SLUMP : Mod
                 MonoModHooks.Modify(subserverLinkConnectAndSend, ModifySubserverLinkConnectAndSend);
             }
 
+            MethodInfo subserverLinkClose = SubserverLinkType.GetMethod("Close", BindingFlags.Instance | BindingFlags.Public);
+            if (subserverLinkClose != null)
+            {
+                MonoModHooks.Modify(subserverLinkClose, ModifySubserverLinkClose);
+            }
+
             MethodInfo subserverSocketAsyncSend = SubserverSocketType.GetMethod("Terraria.Net.Sockets.ISocket.AsyncSend", BindingFlags.Instance | BindingFlags.NonPublic);
             if (subserverSocketAsyncSend != null)
             {
@@ -101,7 +113,7 @@ public class SLUMP : Mod
             MethodInfo subworldSystemSendToMainServer = SubworldSystemType.GetMethod("SendToMainServer", BindingFlags.Static | BindingFlags.Public);
             if (subworldSystemSendToMainServer != null)
             {
-                MonoModHooks.Modify(subworldSystemSendToMainServer, ModifyPipeOutWrite);
+                MonoModHooks.Modify(subworldSystemSendToMainServer, ModifySendToMainServer);
             }
 
             MethodInfo movePlayerToSubserver = SubworldSystemType.GetMethod("MovePlayerToSubserver", BindingFlags.Static | BindingFlags.NonPublic);
@@ -132,6 +144,18 @@ public class SLUMP : Mod
             if (sendToAllSubserversFromMod != null)
             {
                 MonoModHooks.Modify(sendToAllSubserversFromMod, (ILContext il) => { ModifySend(il, 1); });
+            }
+
+            MethodInfo startSubserver = SubworldSystemType.GetMethod("StartSubserver", BindingFlags.Static | BindingFlags.Public);
+            if (startSubserver != null)
+            { 
+                MonoModHooks.Modify(startSubserver, ModifyStartSubserver);
+            }
+
+            MethodInfo stopSubserver = SubworldSystemType.GetMethod("StopSubserver", BindingFlags.Static | BindingFlags.Public);
+            if (stopSubserver != null)
+            {
+                MonoModHooks.Modify(stopSubserver, ModifyStopSubserver);
             }
 
             MethodInfo sendBestiary = subworldLibrary.GetMethod("SendBestiary", BindingFlags.Static | BindingFlags.NonPublic);
@@ -183,6 +207,19 @@ public class SLUMP : Mod
                 IsBackground = true,
             };
             MainServerWriteLoopThread.Start();
+        }
+
+        // =================================================
+        // = OTHER =========================================
+        // =================================================
+
+        // Re-implement the failed patch of sublib
+
+        if (!IsSubserver
+            && ModLoader.TryGetMod("SubworldLibrary", out Mod sublib)
+            && sublib.Version == new Version(2, 2, 3, 1))
+        {
+            IL_Netplay.UpdateConnectedClients += ModifyUpdateConnectedClients;
         }
     }
 
@@ -260,7 +297,7 @@ public class SLUMP : Mod
         }
         else
         {
-            Instance.Logger.Debug("FAILED: ");
+            Instance.Logger.Debug("FAILED: 1");
         }
     }
 
@@ -342,7 +379,7 @@ public class SLUMP : Mod
         }
         else
         {
-            Instance.Logger.Debug("FAILED: ");
+            Instance.Logger.Debug("FAILED: 2");
         }
     }
 
@@ -399,12 +436,12 @@ public class SLUMP : Mod
                 }
                 else
                 {
-                    Instance.Logger.Debug("FAILED: " + i);
+                    Instance.Logger.Debug("FAILED: 3 " + i);
                 }
             }
             else
             {
-                Instance.Logger.Debug("FAILED: " + i);
+                Instance.Logger.Debug("FAILED: 4 " + i);
             }
         }
     }
@@ -455,7 +492,7 @@ public class SLUMP : Mod
         }
         else
         {
-            Instance.Logger.Debug("FAILED: ");
+            Instance.Logger.Debug("FAILED: 5");
         }
     }
 
@@ -492,7 +529,42 @@ public class SLUMP : Mod
         }
         else
         {
-            Instance.Logger.Debug("FAILED: ");
+            Instance.Logger.Debug("FAILED: 6");
+        }
+    }
+
+    private static void ModifySendToMainServer(ILContext il)
+    {
+        ILCursor c = new(il);
+
+        int data = -1;
+
+        if (c.TryGotoNext(
+            x => x.MatchLdsfld("SubworldLibrary.SubworldSystem", "pipeOut"),
+            x => x.MatchLdloc(out data)))
+        {
+            ILLabel exit = il.DefineLabel();
+
+            // Access the config option and branch if necessary
+            c.Emit(OpCodes.Ldsfld, typeof(SLUMP).GetField("WriteLoopActive", BindingFlags.Static | BindingFlags.Public));
+            c.Emit(OpCodes.Brfalse, exit);
+
+            // Push the fields to the stack
+            c.Emit(OpCodes.Ldsfld, typeof(SubworldSystem).GetField("pipeOut", BindingFlags.Static | BindingFlags.NonPublic));
+            c.Emit(OpCodes.Ldloc, data);
+
+            // Execute the patch
+            c.Emit(OpCodes.Call, typeof(SLUMP).GetMethod("AddMainServerPacket", BindingFlags.Static | BindingFlags.NonPublic));
+
+            // RETURN here
+            c.Emit(OpCodes.Ret);
+
+            // Exit label when not used
+            c.MarkLabel(exit);
+        }
+        else
+        {
+            Instance.Logger.Debug("FAILED: 7");
         }
     }
 
@@ -611,6 +683,140 @@ public class SLUMP : Mod
 
             // Cleanup
             packet = null;
+        }
+    }
+    #endregion
+
+    #region Server Crash Detection
+    private static void ModifyStartSubserver(ILContext il)
+    {
+        ILCursor c = new(il);
+
+        if (!c.TryGotoNext(
+            x => x.MatchDup(),
+            x => x.MatchCallvirt<Process>("get_StartInfo")))
+        {
+            Instance.Logger.Debug("FAILED: 8");
+            return;
+        }
+        
+        c.Emit(OpCodes.Dup);
+        c.Emit(OpCodes.Ldarg_0);
+        c.EmitDelegate((Process p, int id) => 
+        { 
+            p.EnableRaisingEvents = true;
+            p.Exited += (sender, e) =>
+            {
+                if (ServerCrashDetectionActive)
+                {
+                    SubworldSystem.StopSubserver(id);
+                }
+            };
+        });
+    }
+
+    private static void ModifyStopSubserver(ILContext il)
+    {
+        ILCursor c = new(il);
+
+        ILLabel bypass = il.DefineLabel();
+        int subworld = -1;
+
+        if (!c.TryGotoNext(
+            x => x.MatchLdloc(out subworld),
+            x => x.MatchLdfld<Subworld>("link"),
+            x => x.MatchBrtrue(out _)))
+        {
+            Instance.Logger.Debug("FAILED: 9");
+            return;
+        }
+
+        int startIndex = c.Index;
+
+        c.Index += 3;
+
+        if (!c.TryGotoNext(
+            x => x.MatchLdloc(out _),
+            x => x.MatchLdfld<Subworld>("link"),
+            x => x.MatchCallvirt("SubworldLibrary.SubserverLink", "Close")))
+        {
+            Instance.Logger.Debug("FAILED: 10");
+            return;
+        }
+
+        c.Index += 3;
+
+        c.MarkLabel(bypass);
+
+        c.Index = startIndex;
+        c.Emit(OpCodes.Br, bypass);
+
+        // ----------------------------
+
+        ILLabel exit = il.DefineLabel();
+
+        c.Emit(OpCodes.Ldloc, subworld);
+        c.Emit(OpCodes.Ldfld, typeof(Subworld).GetField("link", BindingFlags.Instance | BindingFlags.NonPublic));
+        c.Emit(OpCodes.Brfalse, exit);
+
+        c.Emit(OpCodes.Ldloc, subworld);
+        c.Emit(OpCodes.Ldfld, typeof(Subworld).GetField("link", BindingFlags.Instance | BindingFlags.NonPublic));
+        c.Emit(OpCodes.Ldfld, SubserverLinkType.GetField("_connected", BindingFlags.Instance | BindingFlags.NonPublic));
+        c.EmitDelegate((bool connected) =>
+        {
+            if (!connected)
+            {
+                Instance.Logger.Info("Server crash detected!");
+                ChatHelper.BroadcastChatMessage(NetworkText.FromLiteral("Server crash detected! Please check logs!"), Color.Red);
+            }
+        });
+
+        c.Emit(OpCodes.Ldloc, subworld);
+        c.Emit(OpCodes.Ldfld, typeof(Subworld).GetField("link", BindingFlags.Instance | BindingFlags.NonPublic));
+        c.Emit(OpCodes.Callvirt, SubserverLinkType.GetMethod("Close", BindingFlags.Instance | BindingFlags.Public));
+
+        c.MarkLabel(exit);
+    }
+
+    private static void ModifySubserverLinkClose(ILContext il)
+    {
+        ILCursor c = new(il);
+
+        c.Emit(OpCodes.Ldarg_0);
+        c.Emit(OpCodes.Ldfld, SubserverLinkType.GetField("_connected", BindingFlags.Instance | BindingFlags.NonPublic));
+        c.EmitDelegate((bool connected) =>
+        {
+            if (!connected)
+            {
+                Instance.Logger.Info("Server crash detected!");
+                ChatHelper.BroadcastChatMessage(NetworkText.FromLiteral("Server crash detected! Please check logs!"), Color.Red);  
+            }
+        });
+
+        Instance.Logger.Debug(il.ToString());
+    }
+    #endregion
+
+    #region Other
+    private static void ModifyUpdateConnectedClients(ILContext il)
+    {
+        ILCursor c = new(il);
+
+        int index = -1;
+
+        if (c.TryGotoNext(
+            x => x.MatchLdloc(out index),
+            x => x.MatchLdelemRef(),
+            x => x.MatchCallvirt<RemoteClient>("Reset")))
+        {
+            c.Index += 3;
+
+            c.Emit(OpCodes.Ldloc, index);
+            c.Emit(OpCodes.Call, typeof(SubworldSystem).GetMethod("SyncDisconnect", BindingFlags.NonPublic | BindingFlags.Static));
+        }
+        else
+        {
+            Instance.Logger.Error("FAILED: 11");
         }
     }
     #endregion

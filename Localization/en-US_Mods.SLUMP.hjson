@@ -11,5 +11,10 @@ Configs: {
 			Label: Enable Packet Filter
 			Tooltip: ""
 		}
+
+		EnableServerCrashDetection: {
+			Label: Enable Server Crash Detection
+			Tooltip: ""
+		}
 	}
 }

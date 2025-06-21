@@ -26,10 +26,19 @@ public class SLUMPConfigServer : ModConfig
     [DefaultValue(true)]
     public bool EnablePacketFilterPatch = true;
 
+    /// <summary>
+    /// Determines if the Server Crash detection is enabled. When enabled
+    /// SLUMP will check if a server stopped or crashed unexpectedly and
+    /// puts all players back to main world.
+    /// </summary>
+    [DefaultValue(true)]
+    public bool EnableServerCrashDetection = true;
+
     // Update the values when the config has been changed
     public override void OnChanged()
     {
         SLUMP.PacketFilterActive = EnablePacketFilterPatch;
         SLUMP.WriteLoopActive = EnableAsyncWritePatch;
+        SLUMP.ServerCrashDetectionActive = EnableServerCrashDetection;
     }
 }
