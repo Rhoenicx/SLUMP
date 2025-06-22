@@ -2,7 +2,7 @@ Subworld Library Unofficial Mod Patch (SLUMP)
 
 This mod patches Subworld Library by adding additional functionality and potential fixes to improve the multiplayer experience of subworlds.
 
-Currently the mod contains 2 server-sided patches which may improve stability in multiplayer:
+Currently the mod contains 3 server-sided patches which may improve stability in multiplayer:
 
 1) Write Loop Thread.
 - Seperates the Main Thread and sub/main server Read Loop Thread by adding an additional communication layer.
@@ -17,6 +17,24 @@ Currently the mod contains 2 server-sided patches which may improve stability in
 - Reduces the chance of random disconnects or 'infinite loading screens' when going between servers.
 - Bypasses 'bootplayer' code.
 
+3) Crash Detection.
+- Keeps track of the process of the subserver.
+- When the subserver closes transfers all players connected to the subserver back to the main server.
+- NOTE: Trying to rejoin a crashed server might still cause infinite loading screens.
+
 The individual patches can be enabled/disabled in the mod config. Some might need a reload!
 
 If you encounter any problems, please post them on the workshop page.
+
+---------------------------------------------------------------------------
+
+FAQ:
+
+Q: I get the message 'Backing up player file'.
+A: Most likely the subserver crashed. Please check the log files for errors.
+
+Q: Does this mod fix multiplayer for XYZ mod?
+A: These patches are aimed at Subworld Library specifically, if another mod is not multiplayer compatible this will not make it work.
+
+Q: Why do my boss downed status get reset?
+A: Most likely only affects Calamity bosses, seems to be some issue on their end or a mod incompatibility. Use 'Calamity Boss Resyncer' mod for the time being.
