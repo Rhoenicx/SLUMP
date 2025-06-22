@@ -12,7 +12,6 @@ using System.Reflection;
 using System.Threading;
 using Terraria;
 using Terraria.Chat;
-using Terraria.GameContent.RGB;
 using Terraria.ID;
 using Terraria.Localization;
 using Terraria.ModLoader;
@@ -750,6 +749,7 @@ public class SLUMP : Mod
 
         c.Index = startIndex;
         c.Emit(OpCodes.Br, bypass);
+        c.Index--;
 
         // ----------------------------
 
