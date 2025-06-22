@@ -792,8 +792,6 @@ public class SLUMP : Mod
                 ChatHelper.BroadcastChatMessage(NetworkText.FromLiteral("Server crash detected! Please check logs!"), Color.Red);  
             }
         });
-
-        Instance.Logger.Debug(il.ToString());
     }
     #endregion
 
