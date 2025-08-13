@@ -1,6 +1,6 @@
 displayName = Subworld Library Unofficial Mod Patch
 author = Rhoenicx
-version = 1.0.0.4
+version = 1.0.0.5
 modReferences = SubworldLibrary
 sorfAfter = SubworldLibrary
 buildIgnore = .gitignore, *.sln, *.csproj, *.user, obj\*, bin\*, .vs\*, Properties\*, .git\*, _Dependencies\*

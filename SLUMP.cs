@@ -66,10 +66,20 @@ public class SLUMP : Mod
     private static void LoadServer()
     {
         // =================================================
-        // = Initialize ====================================
+        // = Check version =================================
         // =================================================
 
-        IsSubserver = Program.LaunchParameters.ContainsKey("-subworld");
+        if (!ModLoader.TryGetMod("SubworldLibrary", out Mod sublib) || sublib.Version > new Version(2, 2, 3, 1))
+        {
+            Instance.Logger.Warn("SLUMP detected an incompatible version of Subworld Library, patches will not be applied!");
+            return;
+        }
+
+		// =================================================
+		// = Initialize ====================================
+		// =================================================
+
+		IsSubserver = Program.LaunchParameters.ContainsKey("-subworld");
 
         SubServerPackets = [];
         MainServerPackets = [];
@@ -157,6 +167,12 @@ public class SLUMP : Mod
                 MonoModHooks.Modify(stopSubserver, ModifyStopSubserver);
             }
 
+            MethodInfo checkTimeout = SubworldSystemType.GetMethod("CheckTimeout", BindingFlags.Static | BindingFlags.NonPublic);
+            if (checkTimeout != null)
+            {
+                MonoModHooks.Modify(checkTimeout, ModifyCheckTimeout);
+            }
+
             MethodInfo sendBestiary = subworldLibrary.GetMethod("SendBestiary", BindingFlags.Static | BindingFlags.NonPublic);
             if (sendBestiary != null)
             {
@@ -214,9 +230,7 @@ public class SLUMP : Mod
 
         // Re-implement the failed patch of sublib
 
-        if (!IsSubserver
-            && ModLoader.TryGetMod("SubworldLibrary", out Mod sublib)
-            && sublib.Version == new Version(2, 2, 3, 1))
+        if (!IsSubserver)
         {
             IL_Netplay.UpdateConnectedClients += ModifyUpdateConnectedClients;
         }
@@ -299,7 +313,6 @@ public class SLUMP : Mod
             Instance.Logger.Debug("FAILED: 1");
         }
     }
-
 
     /// <summary>
     /// Denies reading a packet on the main thread. This bypasses the bootplayer code that would
@@ -630,8 +643,11 @@ public class SLUMP : Mod
             // Verify the contents of the list
             if (SubServerPackets == null || SubServerPackets.Count <= 0)
             {
-                // No packets to send
-                continue;
+				// Temporarily suspend the thread (to prevent high CPU usage)
+				Thread.Sleep(1);
+
+				// No packets to send
+				continue;
             }
 
             // Lock the packet list temporarily to move the packet on index 0
@@ -663,8 +679,11 @@ public class SLUMP : Mod
             // Verify the contents of the list
             if (MainServerPackets == null || MainServerPackets.Count <= 0)
             {
-                // No packets to send
-                continue;
+                // Temporarily suspend the thread (to prevent high CPU usage)
+                Thread.Sleep(1);
+
+				// No packets to send
+				continue;
             }
 
             // Lock the packet list temporarily to move the packet on index 0
@@ -795,8 +814,23 @@ public class SLUMP : Mod
     }
     #endregion
 
-    #region Other
-    private static void ModifyUpdateConnectedClients(ILContext il)
+    #region CheckTimeout High CPU usage Patch
+    private static void ModifyCheckTimeout(ILContext il)
+    {
+        ILCursor c = new(il);
+
+        if (c.TryGotoNext(x => x.MatchLdsfld(SubworldSystemType, "suppressAutoShutdown")))
+        {
+            c.Emit(OpCodes.Ldc_I4, 1000);
+            c.Emit(OpCodes.Call, typeof(Thread).GetMethods().Single(mi => mi.Name == "Sleep"
+                && mi.GetParameters().Count() == 1
+                && mi.GetParameters()[0].ParameterType == typeof(int)));
+        }
+    }
+	#endregion
+
+	#region Other
+	private static void ModifyUpdateConnectedClients(ILContext il)
     {
         ILCursor c = new(il);
 
