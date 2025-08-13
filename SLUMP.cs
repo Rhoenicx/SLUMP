@@ -819,7 +819,7 @@ public class SLUMP : Mod
     {
         ILCursor c = new(il);
 
-        if (c.TryGotoNext(x => x.MatchLdsfld(SubworldSystemType, "suppressAutoShutdown")))
+        if (c.TryGotoNext(MoveType.AfterLabel, x => x.MatchLdsfld(SubworldSystemType, "suppressAutoShutdown")))
         {
             c.Emit(OpCodes.Ldc_I4, 1000);
             c.Emit(OpCodes.Call, typeof(Thread).GetMethods().Single(mi => mi.Name == "Sleep"
